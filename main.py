@@ -49,11 +49,7 @@ conn.commit()
 
 # Commands
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Welcome, I'm your restaurant bot! \nMy goal is to help you not forget your favorite restaurants. \nHere you can add restaurants you liked to your favorites list, or restaurants you would like to visit to your wish list. \nDon't worry, you can always update, edit or remove them (type / to display all possible actions). \nHave fun :)")
-
-
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text('H-E-L-P')
+    await update.message.reply_text("Welcome, I'm your restaurant bot! \nMy goal is to help you not forget your favorite restaurants. \nHere you can add restaurants you liked to your favorites list, or restaurants you would like to visit to your wish list. \nDon't worry, you can always update, edit or remove them - type / to display all possible actions. \nHave fun :)")
 
 
 async def add_to_visited(update: Update, context: CallbackContext):
@@ -66,6 +62,35 @@ async def get_restaurant_info(update: Update, context: CallbackContext):
     chat_id = update.message.chat_id
     await context.bot.send_message(chat_id, "Please enter the name of the restaurant you want details for:")
     context.user_data['pending_action'] = 'get_restaurant_name'  # Storing the current pending action
+
+
+async def add_to_wishlist(update: Update, context: CallbackContext):
+    chat_id = update.message.chat_id
+    await context.bot.send_message(chat_id, "Please provide details about the restaurant you want to add to your wish list.\n\n" "Enter the name of the restaurant:")
+    context.user_data['pending_action'] = 'restaurant_name_wishlist'  # Storing the current pending action
+
+
+async def view_wishlist(update: Update, context: CallbackContext):
+    chat_id = update.message.chat_id
+
+    # Fetch all restaurants from the wish list for the current chat_id
+    cursor.execute('SELECT * FROM wish_list WHERE chat_id = ?', (chat_id,))
+    result = cursor.fetchall()
+
+    if result:
+        response_message = "<u>Your Wish List:</u>\n\n"
+        for row in result:
+            restaurant_name = row[1]  # Assuming name is in the second column
+            address = row[2]  # Assuming address is in the third column
+            comments = row[3]  # Assuming comments are in the fourth column
+
+            response_message += f"<b>שם:</b> {restaurant_name}\n" \
+                               f"<b>כתובת:</b> {address}\n" \
+                               f"<b>הערות:</b> {comments}\n\n"
+
+        await context.bot.send_message(chat_id, response_message, parse_mode=ParseMode.HTML)
+    else:
+        await context.bot.send_message(chat_id, "Your wish list is empty.")
 
 
 async def handle_user_input(update: Update, context: CallbackContext):
@@ -139,10 +164,36 @@ async def handle_user_input(update: Update, context: CallbackContext):
 
             context.user_data.clear()
 
+        elif pending_action == 'restaurant_name_wishlist':
+            context.user_data['restaurant_name'] = user_input
+            await context.bot.send_message(chat_id, "Enter the address of the restaurant:")
+            context.user_data['pending_action'] = 'restaurant_address_wishlist'
 
-# async def add_to_wishlist(update: Update, context: CallbackContext):
-#
-#
+        elif pending_action == 'restaurant_address_wishlist':
+            context.user_data['restaurant_address'] = user_input
+            await context.bot.send_message(chat_id, "Any comments or notes about the restaurant?")
+            context.user_data['pending_action'] = 'comments_wishlist'
+
+        elif pending_action == 'comments_wishlist':
+            context.user_data['comments'] = user_input
+
+            # Store gathered data into the wish_list table
+            cursor.execute('''
+                INSERT OR REPLACE INTO wish_list (chat_id, name, address, comments)
+                VALUES (?, ?, ?, ?)
+            ''', (
+                chat_id,
+                context.user_data['restaurant_name'],
+                context.user_data['restaurant_address'],
+                context.user_data['comments']
+            ))
+            conn.commit()
+
+            await context.bot.send_message(chat_id, "Restaurant added to your wish list!\n"
+                                              "You can use /getwishlist to view your wish list.")
+            context.user_data.clear()  # Clear user data after processing
+
+
 # async def view_wishlist(update: Update, context: CallbackContext):
 
 
@@ -159,9 +210,10 @@ if __name__ == '__main__':
 
     # Commands
     app.add_handler(CommandHandler('start', start_command))
-    app.add_handler(CommandHandler('help', help_command))
     app.add_handler(CommandHandler("addvisited", add_to_visited))
     app.add_handler(CommandHandler('getinfo', get_restaurant_info))
+    app.add_handler(CommandHandler("addtowishlist", add_to_wishlist))
+    app.add_handler(CommandHandler("getwishlist", view_wishlist))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_user_input))
 
     # Messages
