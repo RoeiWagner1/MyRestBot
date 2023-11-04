@@ -122,6 +122,12 @@ async def delete_restaurant(update: Update, context: CallbackContext):
     context.user_data['pending_action'] = 'delete_restaurant'
 
 
+async def edit_restaurant(update: Update, context: CallbackContext):
+    chat_id = update.message.chat_id
+    await context.bot.send_message(chat_id, "Which restaurant do you want to edit? \nEnter the name of the restaurant:")
+    context.user_data['pending_action'] = 'edit_restaurant'
+
+
 async def handle_user_input(update: Update, context: CallbackContext):
     chat_id = update.message.chat_id
     user_input = update.message.text
@@ -271,6 +277,86 @@ async def handle_user_input(update: Update, context: CallbackContext):
             else:
                 await context.bot.send_message(chat_id, "The restaurant you want to delete was not found.")
 
+        elif pending_action == 'edit_restaurant':
+            user_input = update.message.text
+            chat_id = update.message.chat_id
+
+            cursor.execute('SELECT * FROM visited_restaurants WHERE chat_id = ? AND name = ?', (chat_id, user_input))
+            result_visited = cursor.fetchone()
+
+            cursor.execute('SELECT * FROM wish_list WHERE chat_id = ? AND name = ?', (chat_id, user_input))
+            result_wishlist = cursor.fetchone()
+
+            if result_visited:
+                await context.bot.send_message(chat_id,
+                                               "Which field do you want to edit? \n(name, address, last_visited_date, specific_dishes, comments)")
+                context.user_data['pending_action'] = 'edit_visited'
+                context.user_data['restaurant_name'] = user_input  # Store the restaurant name for the edit operation
+
+            elif result_wishlist:
+                await context.bot.send_message(chat_id, "Which field do you want to edit? \n(name, address, comments)")
+                context.user_data['pending_action'] = 'edit_wishlist'
+                context.user_data['restaurant_name'] = user_input  # Store the restaurant name for the edit operation
+
+            else:
+                await context.bot.send_message(chat_id, "The restaurant you want to edit was not found.")
+
+        elif pending_action == 'edit_visited':
+            user_input = update.message.text.lower()
+            valid_fields_visited = ["name", "address", "last_visited_date", "specific_dishes", "comments"]
+
+            if user_input in valid_fields_visited:
+                field = user_input
+                chat_id = update.message.chat_id
+
+                await context.bot.send_message(chat_id, f"Enter the new {field.replace('_', ' ')} for the restaurant:")
+                context.user_data['pending_action'] = f'edit_visited_{field}'
+
+            else:
+                await context.bot.send_message(chat_id, "Invalid field. Please select a valid field to edit.")
+
+        elif pending_action == 'edit_wishlist':
+            user_input = update.message.text.lower()
+            valid_fields_wishlist = ["name", "address", "comments"]
+
+            if user_input in valid_fields_wishlist:
+                field = user_input
+                chat_id = update.message.chat_id
+
+                await context.bot.send_message(chat_id, f"Enter the new {field.replace('_', ' ')} for the restaurant:")
+                context.user_data['pending_action'] = f'edit_wishlist_{field}'
+
+            else:
+                await context.bot.send_message(chat_id, "Invalid field. Please select a valid field to edit.")
+
+        # Handler for 'visited' table field update
+        elif pending_action.startswith('edit_visited_'):
+            field = pending_action.split('_')[-1]
+            user_input = update.message.text
+            chat_id = update.message.chat_id
+            restaurant_name = context.user_data['restaurant_name']
+
+            cursor.execute(f'UPDATE visited_restaurants SET {field} = ? WHERE chat_id = ? AND name = ?',
+                           (user_input, chat_id, restaurant_name))
+            conn.commit()
+            await context.bot.send_message(chat_id, f"Restaurant '{restaurant_name}' details updated.")
+
+            context.user_data.clear()
+
+        # Handler for 'wishlist' table field update
+        elif pending_action.startswith('edit_wishlist_'):
+            field = pending_action.split('_')[-1]
+            user_input = update.message.text
+            chat_id = update.message.chat_id
+            restaurant_name = context.user_data['restaurant_name']
+
+            cursor.execute(f'UPDATE wish_list SET {field} = ? WHERE chat_id = ? AND name = ?',
+                           (user_input, chat_id, restaurant_name))
+            conn.commit()
+
+            await context.bot.send_message(chat_id, f"Restaurant '{restaurant_name}' details updated.")
+            context.user_data.clear()
+
     else:
         if 'hello' in user_input.lower() or 'hey' in user_input.lower() or 'שלום' in user_input:
             await context.bot.send_message(chat_id, "Hello! \nNice to have you here :)")
@@ -299,6 +385,7 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler("getwishlist", view_wishlist))
     app.add_handler(CommandHandler("getfavorites", view_favorites))
     app.add_handler(CommandHandler("delete", delete_restaurant))
+    app.add_handler(CommandHandler("edit", edit_restaurant))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_user_input))
 
     # Error
