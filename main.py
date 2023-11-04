@@ -193,6 +193,17 @@ async def handle_user_input(update: Update, context: CallbackContext):
                                               "You can use /getwishlist to view your wish list.")
             context.user_data.clear()  # Clear user data after processing
 
+    else:
+        if 'hello' in user_input.lower() or 'hey' in user_input.lower() or 'שלום' in user_input:
+            await context.bot.send_message(chat_id, "Hello! \nNice to have you here :)")
+
+        elif 'how are you' in user_input.lower() or "whats up" in user_input.lower() or 'מה קורה' in user_input:
+            await context.bot.send_message(chat_id, "I'm good, thank you for asking!")
+
+        else:
+            await context.bot.send_message(chat_id, "Sorry, I didn't understand what you wrote :( \nI'm a bot so I respond to specific words or built-in commands that you can see by typing the character /")
+            return
+
 
 # async def view_wishlist(update: Update, context: CallbackContext):
 
