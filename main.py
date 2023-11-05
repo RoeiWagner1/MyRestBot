@@ -50,7 +50,7 @@ conn.commit()
 
 # Commands
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Welcome, I'm your restaurant bot! \nMy goal is to help you not forget your favorite restaurants. \nHere you can add restaurants you liked to your favorites list, or restaurants you would like to visit to your wish list. \nDon't worry, you can always update, edit or remove them - type / to display all possible actions. \nHave fun :)")
+    await update.message.reply_text("Welcome! I'm WishDish, your restaurant bot :) \n\nMy aim is to ensure you never forget your favorite restaurants. \nYou can add the restaurants you love to your favorites list or the ones you wish to visit to your wish list. \n\nFeel free to update, edit, or remove them anytime. Just type '/' to see all available actions. \n\nEnjoy!")
 
 
 async def add_to_favorites(update: Update, context: CallbackContext):
@@ -432,7 +432,7 @@ async def handle_user_input(update: Update, context: CallbackContext):
             await context.bot.send_message(chat_id, "I'm good, thank you for asking!")
 
         else:
-            await context.bot.send_message(chat_id, "Sorry, I didn't understand what you wrote :( \n\nI know to respond only for specific words or built-in commands (type /). \n\nIf you've entered a restaurant name, you can use '/getinfo' to check if it's on one of your lists.")
+            await context.bot.send_message(chat_id, "I'm sorry, I couldn't understand what you wrote... \n\nI respond only to specific words or built-in commands (type '/'). \n\n If you've entered a restaurant name, you can use '/getinfo' to check if it's on one of your lists.")
             return
 
 
@@ -447,8 +447,8 @@ if __name__ == '__main__':
     # Commands
     app.add_handler(CommandHandler('start', start_command))
     app.add_handler(CommandHandler("addtofavorites", add_to_favorites))
-    app.add_handler(CommandHandler('getinfo', get_restaurant_info))
     app.add_handler(CommandHandler("addtowishlist", add_to_wishlist))
+    app.add_handler(CommandHandler('getinfo', get_restaurant_info))
     app.add_handler(CommandHandler("getwishlist", view_wishlist))
     app.add_handler(CommandHandler("getfavorites", view_favorites))
     app.add_handler(CommandHandler("delete", delete_restaurant))
