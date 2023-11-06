@@ -1,9 +1,12 @@
 import re
 import sqlite3
 from typing import Final
-from telegram import Update
+
+import updater
+from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.constants import ParseMode
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, CallbackContext
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, CallbackContext, \
+    CallbackQueryHandler, ConversationHandler, Updater
 
 TOKEN = 0
 BOT_USERNAME: Final = '@MyRestList_bot'
@@ -53,27 +56,23 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Welcome! I'm WishDish, your restaurant bot :) \n\nMy aim is to ensure you never forget your favorite restaurants. \nYou can add the restaurants you love to your favorites list or the ones you wish to visit to your wish list. \n\nFeel free to update, edit, or remove them anytime. Just type '/' to see all available actions. \n\nEnjoy!")
 
 
-async def add_to_favorites(update: Update, context: CallbackContext):
-    chat_id = update.message.chat_id
-    await context.bot.send_message(chat_id, "Please provide details about the restaurant you visited.\n\n" "Enter the name:")
+async def add_to_favorites(chat_id, context: CallbackContext):
+    await context.bot.send_message(chat_id, "Enter the name of the restaurant:")
     context.user_data['pending_action'] = 'restaurant_name_visited'  # Storing the current pending action
+
+
+async def add_to_wishlist(chat_id, context: CallbackContext):
+    await context.bot.send_message(chat_id, "Enter the name of the restaurant:")
+    context.user_data['pending_action'] = 'restaurant_name_wishlist'  # Storing the current pending action
 
 
 async def get_restaurant_info(update: Update, context: CallbackContext):
     chat_id = update.message.chat_id
-    await context.bot.send_message(chat_id, "Please enter the name of the restaurant you want details for:")
+    await context.bot.send_message(chat_id, "Please enter the name of the restaurant:")
     context.user_data['pending_action'] = 'get_restaurant_name'  # Storing the current pending action
 
 
-async def add_to_wishlist(update: Update, context: CallbackContext):
-    chat_id = update.message.chat_id
-    await context.bot.send_message(chat_id, "Please provide details about the restaurant you want to add to your wish list.\n\n" "Enter the name of the restaurant:")
-    context.user_data['pending_action'] = 'restaurant_name_wishlist'  # Storing the current pending action
-
-
-async def view_wishlist(update: Update, context: CallbackContext):
-    chat_id = update.message.chat_id
-
+async def view_wishlist(chat_id, context: CallbackContext):
     # Fetch all restaurants from the wish list for the current chat_id
     cursor.execute('SELECT * FROM wish_list WHERE chat_id = ?', (chat_id,))
     result = cursor.fetchall()
@@ -94,9 +93,7 @@ async def view_wishlist(update: Update, context: CallbackContext):
         await context.bot.send_message(chat_id, "Your wish list is empty.")
 
 
-async def view_favorites(update: Update, context: CallbackContext):
-    chat_id = update.message.chat_id
-
+async def view_favorites(chat_id, context: CallbackContext):
     # Fetch all restaurants from the wish list for the current chat_id
     cursor.execute('SELECT * FROM visited_restaurants WHERE chat_id = ?', (chat_id,))
     result = cursor.fetchall()
@@ -117,20 +114,17 @@ async def view_favorites(update: Update, context: CallbackContext):
         await context.bot.send_message(chat_id, "Your wish list is empty.")
 
 
-async def delete_restaurant(update: Update, context: CallbackContext):
-    chat_id = update.message.chat_id
+async def delete_restaurant(chat_id, context: CallbackContext):
     await context.bot.send_message(chat_id, "Which restaurant do you want to delete? Enter the name:")
     context.user_data['pending_action'] = 'delete_restaurant'
 
 
-async def edit_restaurant(update: Update, context: CallbackContext):
-    chat_id = update.message.chat_id
+async def edit_restaurant(chat_id, context: CallbackContext):
     await context.bot.send_message(chat_id, "Which restaurant do you want to edit? \nEnter the name:")
     context.user_data['pending_action'] = 'edit_restaurant'
 
 
-async def move_to_favorites(update: Update, context: CallbackContext):
-    chat_id = update.message.chat_id
+async def move_to_favorites(chat_id, context: CallbackContext):
     await context.bot.send_message(chat_id, "Enter the name of the restaurant you want to move from wishlist to favorites:")
     context.user_data['pending_action'] = 'restaurant_name_to_move'  # Storing the current pending action
 
@@ -150,6 +144,74 @@ async def restaurant_to_favorites(chat_id, restaurant_name):
         return True
     else:
         return False
+
+
+async def view_list(update: Update, context: CallbackContext):
+    chat_id = update.message.chat_id
+
+    keyboard = [
+        [
+            InlineKeyboardButton("Wish List", callback_data='wish_list_view'),
+            InlineKeyboardButton("Favorites", callback_data='favorites_view')
+        ]
+    ]
+
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await context.bot.send_message(chat_id, "Choose a list:", reply_markup=reply_markup)
+
+
+async def add(update: Update, context: CallbackContext):
+    chat_id = update.message.chat_id
+
+    keyboard = [
+        [
+            InlineKeyboardButton("Wish List", callback_data='wish_list_add'),
+            InlineKeyboardButton("Favorites", callback_data='favorites_add')
+        ]
+    ]
+
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await context.bot.send_message(chat_id, "Choose a list to add the restaurant:", reply_markup=reply_markup)
+
+
+async def update_rest(update: Update, context: CallbackContext):
+    chat_id = update.message.chat_id
+
+    keyboard = [
+        [
+            InlineKeyboardButton("Edit Restaurant", callback_data='edit')
+        ],
+        [
+            InlineKeyboardButton("Delete Restaurant", callback_data='delete')
+        ],
+        [
+            InlineKeyboardButton("Move Restaurant To Favorites", callback_data='move')
+        ]
+    ]
+
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await context.bot.send_message(chat_id, "Choose:", reply_markup=reply_markup)
+
+
+async def button(update: Update, context: CallbackContext):
+    query = update.callback_query
+    chat_id = query.message.chat_id
+    data = query.data
+
+    if data == 'wish_list_view':
+        await view_wishlist(chat_id, context)
+    elif data == 'favorites_view':
+        await view_favorites(chat_id, context)
+    elif data == 'wish_list_add':
+        await add_to_wishlist(chat_id, context)
+    elif data == 'favorites_add':
+        await add_to_favorites(chat_id, context)
+    elif data == 'edit':
+        await edit_restaurant(chat_id, context)
+    elif data == 'delete':
+        await delete_restaurant(chat_id, context)
+    elif data == 'move':
+        await move_to_favorites(chat_id, context)
 
 
 async def handle_user_input(update: Update, context: CallbackContext):
@@ -446,14 +508,16 @@ if __name__ == '__main__':
 
     # Commands
     app.add_handler(CommandHandler('start', start_command))
-    app.add_handler(CommandHandler("addtofavorites", add_to_favorites))
-    app.add_handler(CommandHandler("addtowishlist", add_to_wishlist))
+    app.add_handler(CommandHandler("add", add))
+    app.add_handler(CommandHandler('getlist', view_list))
     app.add_handler(CommandHandler('getinfo', get_restaurant_info))
-    app.add_handler(CommandHandler("getwishlist", view_wishlist))
-    app.add_handler(CommandHandler("getfavorites", view_favorites))
+    app.add_handler(CommandHandler('update', update_rest))
+
     app.add_handler(CommandHandler("delete", delete_restaurant))
     app.add_handler(CommandHandler("edit", edit_restaurant))
     app.add_handler(CommandHandler("movetofavorites", move_to_favorites))
+
+    app.add_handler(CallbackQueryHandler(button))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_user_input))
 
     # Error
