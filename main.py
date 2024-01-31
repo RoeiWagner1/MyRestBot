@@ -1,15 +1,11 @@
 import re
 import sqlite3
-from typing import Final
-
-import updater
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.constants import ParseMode
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, CallbackContext, \
-    CallbackQueryHandler, ConversationHandler, Updater
+    CallbackQueryHandler
 
 TOKEN = 0
-BOT_USERNAME: Final = '@MyRestList_bot'
 
 # Read the token from the config file
 with open('config.txt') as file:
@@ -63,7 +59,7 @@ async def display_main_menu(chat_id, context: CallbackContext):
         ]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await context.bot.send_message(chat_id, bold_text, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+    await context.bot.send_message(chat_id, text=bold_text, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
 
 
 # Commands
@@ -87,7 +83,8 @@ async def get_restaurant_info(chat_id, context: CallbackContext):
 
 async def view_wishlist(chat_id, context: CallbackContext):
     # Fetch all restaurants from the wish list for the current chat_id
-    cursor.execute('SELECT * FROM wish_list WHERE chat_id = ?', (chat_id,))
+    cursor.execute('SELECT * FROM wish_list WHERE chat_id = ? ORDER BY SUBSTR(address, INSTR(address, ",") + 2)',
+                   (chat_id,))
     result = cursor.fetchall()
 
     if result:
@@ -109,7 +106,8 @@ async def view_wishlist(chat_id, context: CallbackContext):
 
 async def view_favorites(chat_id, context: CallbackContext):
     # Fetch all restaurants from the wish list for the current chat_id
-    cursor.execute('SELECT * FROM visited_restaurants WHERE chat_id = ?', (chat_id,))
+    cursor.execute('SELECT * FROM visited_restaurants WHERE chat_id = ? ORDER BY SUBSTR(address, INSTR(address, ",") + 2)',
+                   (chat_id,))
     result = cursor.fetchall()
 
     if result:
@@ -300,7 +298,6 @@ async def handle_user_input(update: Update, context: CallbackContext):
         elif pending_action == 'last_visited_date':
             user_input = update.message.text
             chat_id = update.message.chat_id
-            restaurant_name = context.user_data['restaurant_name']
 
             if re.match(r'\d{2}\.\d{2}\.\d{4}', user_input):
                 context.user_data['last_visited_date'] = user_input
@@ -398,7 +395,8 @@ async def handle_user_input(update: Update, context: CallbackContext):
                                    f"<b>כתובת:</b> {result_visited[2]}\n" \
                                    f"<b>תאריך ביקור אחרון:</b> {result_visited[3]}\n" \
                                    f"<b>מנות אהובות:</b> {result_visited[4]}\n" \
-                                   f"<b>הערות:</b> {result_visited[5]}"
+                                   f"<b>הערות:</b> {result_visited[5]}\n\n"
+                response_message += f"Press /menu to return to the Menu."
                 await update.message.reply_text(text=response_message, parse_mode=ParseMode.HTML)
 
             elif result_wishlist:
@@ -406,6 +404,7 @@ async def handle_user_input(update: Update, context: CallbackContext):
                                    f"<b>{restaurant_name}</b>\n\n" \
                                    f"<b>כתובת:</b> {result_wishlist[2]}\n" \
                                    f"<b>הערות:</b> {result_wishlist[3]}\n\n"
+                response_message += f"Press /menu to return to the Menu."
                 await update.message.reply_text(text=response_message, parse_mode=ParseMode.HTML)
 
             else:
